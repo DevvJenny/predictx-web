@@ -8,6 +8,20 @@ const addDays = (n: number, hour = 15): string => {
   return d.toISOString();
 };
 
+/**
+ * Compute the lock target ISO from a kickoff ISO and a lockTime key.
+ * Mirrors LOCK_OFFSET_MINUTES in lib/calculations.ts without importing from it
+ * (avoids a circular dependency at module-evaluation time since calculations.ts
+ * does not import from mock-data.ts, but we want to keep mock-data self-contained).
+ *
+ * kickoff: 0 min offset | halftime: 52 min | 60min: 65 min
+ */
+function computeLockISO(kickoff: string, lockTime: "kickoff" | "halftime" | "60min"): string {
+  const offsets = { kickoff: 0, halftime: 52, "60min": 65 } as const;
+  const ms = new Date(kickoff).getTime() + offsets[lockTime] * 60_000;
+  return new Date(ms).toISOString();
+}
+
 import { XLM_USD_RATE } from "@/lib/constants";
 
 // ── Storage keys ──────────────────────────────────────────────────────────────
@@ -98,6 +112,14 @@ export interface Poll {
   lockTime: LockTime;
   recentActivity: string;
   outcome?: "yes" | "no";
+  /**
+   * Computed ISO datetime at which this poll stops accepting stakes.
+   * For built-in lockTime values this is derived from the match kickoff;
+   * for "custom" polls created via the modal this stores the exact user-chosen time.
+   * When present, getLockTargetISO prefers this over the derived offset so custom
+   * polls count down to the correct time.
+   */
+  lockTargetISO?: string;
 }
 
 export interface Stake {
@@ -115,6 +137,13 @@ export interface Stake {
   profit?: number;
   roi?: number;
   resolutionNote?: string;
+  /**
+   * Whether the winner has already claimed their payout.
+   * Only relevant when outcome === "won". Defaults to false (unclaimed).
+   */
+  claimed?: boolean;
+  /** Gross payout before the 5% platform fee; only meaningful on won stakes. */
+  grossPayout?: number;
 }
 
 export interface VotingOpportunity {
@@ -158,13 +187,22 @@ export interface MatchEvidence {
 }
 
 // ── Matches ───────────────────────────────────────────────────────────────────
+// Kickoff times are captured as module-level constants so the POLLS array can
+// reference them when pre-computing lockTargetISO values.
+const M1_KICKOFF = addDays(1, 15);
+const M2_KICKOFF = addDays(2, 17);
+const M3_KICKOFF = addDays(3, 12);
+const M4_KICKOFF = addDays(4, 15);
+const M5_KICKOFF = addDays(0, 13);
+const M6_KICKOFF = addDays(-1, 15);
+
 export const MATCHES: Match[] = [
   {
     id: "m1",
     homeTeam: "Chelsea",
     awayTeam: "Manchester United",
     venue: "Stamford Bridge",
-    kickoff: addDays(1, 15),
+    kickoff: M1_KICKOFF,
     status: "upcoming",
   },
   {
@@ -172,7 +210,7 @@ export const MATCHES: Match[] = [
     homeTeam: "Arsenal",
     awayTeam: "Liverpool",
     venue: "Emirates Stadium",
-    kickoff: addDays(2, 17),
+    kickoff: M2_KICKOFF,
     status: "upcoming",
   },
   {
@@ -180,7 +218,7 @@ export const MATCHES: Match[] = [
     homeTeam: "Manchester City",
     awayTeam: "Tottenham",
     venue: "Etihad Stadium",
-    kickoff: addDays(3, 12),
+    kickoff: M3_KICKOFF,
     status: "upcoming",
   },
   {
@@ -188,7 +226,7 @@ export const MATCHES: Match[] = [
     homeTeam: "Newcastle",
     awayTeam: "Aston Villa",
     venue: "St. James' Park",
-    kickoff: addDays(4, 15),
+    kickoff: M4_KICKOFF,
     status: "upcoming",
   },
   {
@@ -196,7 +234,7 @@ export const MATCHES: Match[] = [
     homeTeam: "Brighton",
     awayTeam: "West Ham",
     venue: "Amex Stadium",
-    kickoff: addDays(0, 13),
+    kickoff: M5_KICKOFF,
     status: "live",
     score: { home: 1, away: 0 },
   },
@@ -205,7 +243,7 @@ export const MATCHES: Match[] = [
     homeTeam: "Everton",
     awayTeam: "Wolves",
     venue: "Goodison Park",
-    kickoff: addDays(-1, 15),
+    kickoff: M6_KICKOFF,
     status: "completed",
     score: { home: 2, away: 1 },
   },
@@ -224,6 +262,7 @@ export const POLLS: Poll[] = [
     participants: 67,
     status: "active",
     lockTime: "kickoff",
+    lockTargetISO: computeLockISO(M1_KICKOFF, "kickoff"),
     recentActivity: "34 people staked Yes in last hour",
     stakeCount: 0,
     stakers: [],
@@ -238,6 +277,7 @@ export const POLLS: Poll[] = [
     participants: 45,
     status: "active",
     lockTime: "halftime",
+    lockTargetISO: computeLockISO(M1_KICKOFF, "halftime"),
     recentActivity: "Pool grew $800 in last 2 hours",
     stakeCount: 0,
     stakers: [],
@@ -252,6 +292,7 @@ export const POLLS: Poll[] = [
     participants: 78,
     status: "active",
     lockTime: "kickoff",
+    lockTargetISO: computeLockISO(M1_KICKOFF, "kickoff"),
     recentActivity: "12 people staked No in last 30min",
     stakeCount: 0,
     stakers: [],
@@ -266,6 +307,7 @@ export const POLLS: Poll[] = [
     participants: 55,
     status: "active",
     lockTime: "60min",
+    lockTargetISO: computeLockISO(M1_KICKOFF, "60min"),
     recentActivity: "Pool grew $1,200 in last hour",
     stakeCount: 0,
     stakers: [],
@@ -282,6 +324,7 @@ export const POLLS: Poll[] = [
     participants: 62,
     status: "active",
     lockTime: "kickoff",
+    lockTargetISO: computeLockISO(M2_KICKOFF, "kickoff"),
     recentActivity: "28 people staked Yes in last hour",
     stakeCount: 0,
     stakers: [],
@@ -296,6 +339,7 @@ export const POLLS: Poll[] = [
     participants: 74,
     status: "active",
     lockTime: "kickoff",
+    lockTargetISO: computeLockISO(M2_KICKOFF, "kickoff"),
     recentActivity: "Pool grew $2,000 in 30min",
     stakeCount: 0,
     stakers: [],
@@ -310,6 +354,7 @@ export const POLLS: Poll[] = [
     participants: 58,
     status: "active",
     lockTime: "halftime",
+    lockTargetISO: computeLockISO(M2_KICKOFF, "halftime"),
     recentActivity: "19 people staked Yes in last 2 hours",
     stakeCount: 0,
     stakers: [],
@@ -324,6 +369,7 @@ export const POLLS: Poll[] = [
     participants: 49,
     status: "active",
     lockTime: "kickoff",
+    lockTargetISO: computeLockISO(M2_KICKOFF, "kickoff"),
     recentActivity: "Pool grew $600 in last hour",
     stakeCount: 0,
     stakers: [],
@@ -338,6 +384,7 @@ export const POLLS: Poll[] = [
     participants: 66,
     status: "active",
     lockTime: "60min",
+    lockTargetISO: computeLockISO(M2_KICKOFF, "60min"),
     recentActivity: "41 people staked Yes in last hour",
     stakeCount: 0,
     stakers: [],
@@ -354,6 +401,7 @@ export const POLLS: Poll[] = [
     participants: 38,
     status: "active",
     lockTime: "kickoff",
+    lockTargetISO: computeLockISO(M3_KICKOFF, "kickoff"),
     recentActivity: "Pool grew $400 in last hour",
     stakeCount: 0,
     stakers: [],
@@ -368,6 +416,7 @@ export const POLLS: Poll[] = [
     participants: 72,
     status: "active",
     lockTime: "kickoff",
+    lockTargetISO: computeLockISO(M3_KICKOFF, "kickoff"),
     recentActivity: "52 people staked Yes in last hour",
     stakeCount: 0,
     stakers: [],
@@ -382,6 +431,7 @@ export const POLLS: Poll[] = [
     participants: 44,
     status: "active",
     lockTime: "kickoff",
+    lockTargetISO: computeLockISO(M3_KICKOFF, "kickoff"),
     recentActivity: "Pool grew $1,500 in last 2 hours",
     stakeCount: 0,
     stakers: [],
@@ -396,6 +446,7 @@ export const POLLS: Poll[] = [
     participants: 56,
     status: "active",
     lockTime: "halftime",
+    lockTargetISO: computeLockISO(M3_KICKOFF, "halftime"),
     recentActivity: "22 people staked Yes in last 30min",
     stakeCount: 0,
     stakers: [],
@@ -412,6 +463,7 @@ export const POLLS: Poll[] = [
     participants: 41,
     status: "active",
     lockTime: "kickoff",
+    lockTargetISO: computeLockISO(M4_KICKOFF, "kickoff"),
     recentActivity: "Pool grew $300 in last hour",
     stakeCount: 0,
     stakers: [],
@@ -426,6 +478,7 @@ export const POLLS: Poll[] = [
     participants: 63,
     status: "active",
     lockTime: "kickoff",
+    lockTargetISO: computeLockISO(M4_KICKOFF, "kickoff"),
     recentActivity: "17 people staked Yes in last hour",
     stakeCount: 0,
     stakers: [],
@@ -440,6 +493,7 @@ export const POLLS: Poll[] = [
     participants: 57,
     status: "active",
     lockTime: "halftime",
+    lockTargetISO: computeLockISO(M4_KICKOFF, "halftime"),
     recentActivity: "Pool grew $900 in last hour",
     stakeCount: 0,
     stakers: [],
@@ -454,6 +508,7 @@ export const POLLS: Poll[] = [
     participants: 39,
     status: "active",
     lockTime: "60min",
+    lockTargetISO: computeLockISO(M4_KICKOFF, "60min"),
     recentActivity: "Pool grew $700 in last 2 hours",
     stakeCount: 0,
     stakers: [],
@@ -468,6 +523,7 @@ export const POLLS: Poll[] = [
     participants: 48,
     status: "active",
     lockTime: "kickoff",
+    lockTargetISO: computeLockISO(M4_KICKOFF, "kickoff"),
     recentActivity: "25 people staked No in last hour",
     stakeCount: 0,
     stakers: [],
@@ -484,6 +540,7 @@ export const POLLS: Poll[] = [
     participants: 74,
     status: "locked",
     lockTime: "kickoff",
+    lockTargetISO: computeLockISO(M5_KICKOFF, "kickoff"),
     recentActivity: "61 people staked Yes before kickoff",
     stakeCount: 0,
     stakers: [],
@@ -498,6 +555,7 @@ export const POLLS: Poll[] = [
     participants: 55,
     status: "locked",
     lockTime: "halftime",
+    lockTargetISO: computeLockISO(M5_KICKOFF, "halftime"),
     recentActivity: "Pool reached $10K before halftime",
     stakeCount: 0,
     stakers: [],
@@ -512,6 +570,7 @@ export const POLLS: Poll[] = [
     participants: 47,
     status: "locked",
     lockTime: "60min",
+    lockTargetISO: computeLockISO(M5_KICKOFF, "60min"),
     recentActivity: "Pool grew $1,800 before 60min",
     stakeCount: 0,
     stakers: [],
@@ -526,6 +585,7 @@ export const POLLS: Poll[] = [
     participants: 60,
     status: "locked",
     lockTime: "halftime",
+    lockTargetISO: computeLockISO(M5_KICKOFF, "halftime"),
     recentActivity: "43 people staked No before halftime",
     stakeCount: 0,
     stakers: [],
@@ -542,6 +602,7 @@ export const POLLS: Poll[] = [
     participants: 71,
     status: "voting",
     lockTime: "kickoff",
+    lockTargetISO: computeLockISO(M6_KICKOFF, "kickoff"),
     recentActivity: "Voting in progress — 2 hours remaining",
     stakeCount: 0,
     stakers: [],
@@ -556,6 +617,7 @@ export const POLLS: Poll[] = [
     participants: 64,
     status: "voting",
     lockTime: "halftime",
+    lockTargetISO: computeLockISO(M6_KICKOFF, "halftime"),
     recentActivity: "Voting in progress",
     stakeCount: 0,
     stakers: [],
@@ -570,6 +632,7 @@ export const POLLS: Poll[] = [
     participants: 43,
     status: "voting",
     lockTime: "kickoff",
+    lockTargetISO: computeLockISO(M6_KICKOFF, "kickoff"),
     recentActivity: "Voting in progress — cast your vote now",
     stakeCount: 0,
     stakers: [],
@@ -584,6 +647,7 @@ export const POLLS: Poll[] = [
     participants: 58,
     status: "voting",
     lockTime: "halftime",
+    lockTargetISO: computeLockISO(M6_KICKOFF, "halftime"),
     recentActivity: "Voting in progress",
     stakeCount: 0,
     stakers: [],
@@ -598,6 +662,7 @@ export const POLLS: Poll[] = [
     participants: 36,
     status: "voting",
     lockTime: "60min",
+    lockTargetISO: computeLockISO(M6_KICKOFF, "60min"),
     recentActivity: "Admin review in progress",
     stakeCount: 0,
     stakers: [],
@@ -796,6 +861,8 @@ export const MOCK_STAKES: Stake[] = [
     outcome: "won",
     profit: calculateCompletedPayout(100, 150).profit,
     roi: calculateCompletedPayout(100, 150).roi,
+    grossPayout: 150,
+    claimed: false,
     wallet: SEED_WALLET,
   },
   {
@@ -810,6 +877,8 @@ export const MOCK_STAKES: Stake[] = [
     outcome: "won",
     profit: calculateCompletedPayout(200, 320).profit,
     roi: calculateCompletedPayout(200, 320).roi,
+    grossPayout: 320,
+    claimed: false,
     wallet: SEED_WALLET,
   },
   {
@@ -824,6 +893,8 @@ export const MOCK_STAKES: Stake[] = [
     outcome: "won",
     profit: calculateCompletedPayout(250, 437).profit,
     roi: calculateCompletedPayout(250, 437).roi,
+    grossPayout: 437,
+    claimed: false,
     wallet: SEED_WALLET,
   },
   {
@@ -838,6 +909,8 @@ export const MOCK_STAKES: Stake[] = [
     outcome: "won",
     profit: calculateCompletedPayout(400, 750).profit,
     roi: calculateCompletedPayout(400, 750).roi,
+    grossPayout: 750,
+    claimed: false,
     wallet: SEED_WALLET,
   },
   {

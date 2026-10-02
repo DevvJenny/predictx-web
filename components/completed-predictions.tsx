@@ -1,102 +1,52 @@
-"use client"
+"use client";
 
-import { TrendingUp, TrendingDown, Calendar } from "lucide-react"
-import { EmptyState } from "./shared/empty-state"
-
-const completedPredictions = [
-  {
-    id: 1,
-    match: "Newcastle vs Aston Villa",
-    question: "Will Gordon score a goal?",
-    yourSide: "yes",
-    yourStake: 250,
-    result: "yes",
-    payout: 412,
-    profit: 162,
-    roi: 64.8,
-    date: "Dec 15, 2025",
-    won: true,
-  },
-  {
-    id: 2,
-    match: "Liverpool vs Chelsea",
-    question: "Will Chelsea keep a clean sheet?",
-    yourSide: "yes",
-    yourStake: 180,
-    result: "no",
-    payout: 0,
-    profit: -180,
-    roi: -100,
-    date: "Dec 14, 2025",
-    won: false,
-  },
-  {
-    id: 3,
-    match: "Man United vs Arsenal",
-    question: "Will there be 4+ goals?",
-    yourSide: "no",
-    yourStake: 200,
-    result: "no",
-    payout: 356,
-    profit: 156,
-    roi: 78,
-    date: "Dec 13, 2025",
-    won: true,
-  },
-  {
-    id: 4,
-    match: "Tottenham vs Brighton",
-    question: "Will Son be subbed out?",
-    yourSide: "yes",
-    yourStake: 120,
-    result: "no",
-    payout: 0,
-    profit: -120,
-    roi: -100,
-    date: "Dec 12, 2025",
-    won: false,
-  },
-  {
-    id: 5,
-    match: "West Ham vs Wolves",
-    question: "Will Bowen score or assist?",
-    yourSide: "yes",
-    yourStake: 150,
-    result: "yes",
-    payout: 289,
-    profit: 139,
-    roi: 92.7,
-    date: "Dec 11, 2025",
-    won: true,
-  },
-  {
-    id: 6,
-    match: "Crystal Palace vs Brentford",
-    question: "Will Palace win?",
-    yourSide: "no",
-    yourStake: 95,
-    result: "yes",
-    payout: 0,
-    profit: -95,
-    roi: -100,
-    date: "Dec 10, 2025",
-    won: false,
-  },
-]
+import { useState } from "react";
+import { TrendingUp, TrendingDown, Calendar, CheckCircle, Coins, AlertCircle } from "lucide-react";
+import { toast } from "sonner";
+import { EmptyState } from "./shared/empty-state";
+import { GamingButton } from "./shared/gaming-button";
+import { useStaking } from "@/hooks/use-staking";
+import { calculateCompletedPayout } from "@/lib/calculations";
+import { PLATFORM_FEE } from "@/lib/calculations";
 
 export function CompletedPredictions() {
-  const totalProfit = completedPredictions.reduce((sum, pred) => sum + pred.profit, 0)
-  const totalStaked = completedPredictions.reduce((sum, pred) => sum + pred.yourStake, 0)
-  const winRate = (completedPredictions.filter((p) => p.won).length / completedPredictions.length) * 100
+  const completedStakes = useStaking((s) => s.completedStakes());
+  const claimStake = useStaking((s) => s.claimStake);
+  const [claiming, setClaiming] = useState<string | null>(null);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
 
-  if (completedPredictions.length === 0) {
+  if (completedStakes.length === 0) {
     return (
       <EmptyState
         icon={<TrendingUp className="w-10 h-10" />}
         title="No Completed Predictions"
         description="Your resolved stakes will appear here once a poll is settled."
       />
-    )
+    );
+  }
+
+  const wonStakes = completedStakes.filter((s) => s.outcome === "won");
+  const totalProfit = completedStakes.reduce((sum, s) => sum + (s.profit ?? 0), 0);
+  const totalStaked = completedStakes.reduce((sum, s) => sum + s.amount, 0);
+  const winRate = completedStakes.length > 0
+    ? (wonStakes.length / completedStakes.length) * 100
+    : 0;
+
+  async function handleClaim(stakeId: string) {
+    setClaiming(stakeId);
+    setConfirmId(null);
+    try {
+      await claimStake(stakeId);
+      toast.success("Winnings Claimed! 🎉", {
+        description: "Your net payout has been credited to your wallet in XLM.",
+      });
+    } catch (err) {
+      toast.error("Claim failed", {
+        description: err instanceof Error ? err.message : "Please try again.",
+      });
+    } finally {
+      setClaiming(null);
+    }
   }
 
   return (
@@ -118,75 +68,139 @@ export function CompletedPredictions() {
         <div className="bg-surface border border-border clip-corner p-4">
           <div className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Total ROI</div>
           <div className={`font-display text-2xl font-black ${totalProfit > 0 ? "text-success" : "text-accent"}`}>
-            {((totalProfit / totalStaked) * 100).toFixed(0)}%
+            {totalStaked > 0 ? ((totalProfit / totalStaked) * 100).toFixed(0) : "0"}%
           </div>
         </div>
       </div>
 
       {/* History */}
       <div className="space-y-3">
-        {completedPredictions.map((pred) => (
-          <div
-            key={pred.id}
-            className={`bg-surface border-2 clip-corner-lg p-5 transition-all ${pred.won ? "border-success/30 hover:border-success/50" : "border-accent/30 hover:border-accent/50"}`}
-          >
-            <div className="flex items-start justify-between gap-4 mb-4">
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  {pred.won ? (
-                    <div className="flex items-center gap-2 px-2 py-1 bg-success/20 text-success rounded text-xs font-bold uppercase">
-                      <TrendingUp className="h-3 w-3" />
-                      WON
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2 px-2 py-1 bg-accent/20 text-accent rounded text-xs font-bold uppercase">
-                      <TrendingDown className="h-3 w-3" />
-                      LOST
-                    </div>
-                  )}
-                  <div className="text-xs text-muted-foreground">{pred.match}</div>
-                </div>
-                <h3 className="font-bold text-foreground">{pred.question}</h3>
-              </div>
-              <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                <Calendar className="h-3 w-3" />
-                {pred.date}
-              </div>
-            </div>
+        {completedStakes.map((stake) => {
+          const won = stake.outcome === "won";
+          const gross = stake.grossPayout ?? (stake.profit != null && won ? stake.amount + stake.profit / (1 - PLATFORM_FEE) : stake.amount);
+          const winningsOnly = gross - stake.amount;
+          const fee = won ? winningsOnly * PLATFORM_FEE : 0;
+          const netPayout = won ? gross - fee : 0;
+          const isConfirming = confirmId === stake.id;
+          const isClaiming = claiming === stake.id;
 
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
-              <div>
-                <div className="text-xs text-muted-foreground mb-1">Your Side</div>
-                <div
-                  className={`text-sm font-bold uppercase ${pred.yourSide === "yes" ? "text-success" : "text-accent"}`}
-                >
-                  {pred.yourSide}
+          return (
+            <div
+              key={stake.id}
+              className={`bg-surface border-2 clip-corner-lg p-5 transition-all ${won ? "border-success/30 hover:border-success/50" : "border-accent/30 hover:border-accent/50"}`}
+            >
+              <div className="flex items-start justify-between gap-4 mb-4 flex-wrap">
+                <div>
+                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                    {won ? (
+                      <div className="flex items-center gap-2 px-2 py-1 bg-success/20 text-success rounded text-xs font-bold uppercase">
+                        <TrendingUp className="h-3 w-3" />
+                        WON
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 px-2 py-1 bg-accent/20 text-accent rounded text-xs font-bold uppercase">
+                        <TrendingDown className="h-3 w-3" />
+                        LOST
+                      </div>
+                    )}
+                    <div className="text-xs text-muted-foreground">{stake.matchName}</div>
+                  </div>
+                  <h3 className="font-bold text-foreground">{stake.question}</h3>
                 </div>
+
+                {/* Claim / Claimed button for won stakes */}
+                {won && (
+                  <div className="flex flex-col items-end gap-2">
+                    {stake.claimed ? (
+                      <div className="flex items-center gap-2 px-3 py-1.5 bg-success/10 text-success border border-success/30 rounded text-xs font-bold uppercase">
+                        <CheckCircle className="h-3 w-3" />
+                        Claimed
+                      </div>
+                    ) : isConfirming ? (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setConfirmId(null)}
+                          className="px-3 py-1.5 text-xs border border-border text-muted-foreground rounded uppercase hover:border-primary transition-colors"
+                        >
+                          Cancel
+                        </button>
+                        <GamingButton
+                          variant="success"
+                          size="sm"
+                          loading={isClaiming}
+                          onClick={() => handleClaim(stake.id)}
+                        >
+                          <CheckCircle className="h-3 w-3" />
+                          Confirm Claim
+                        </GamingButton>
+                      </div>
+                    ) : (
+                      <GamingButton
+                        variant="gold"
+                        size="sm"
+                        onClick={() => setConfirmId(stake.id)}
+                      >
+                        <Coins className="h-3 w-3" />
+                        Claim Winnings
+                      </GamingButton>
+                    )}
+                  </div>
+                )}
               </div>
-              <div>
-                <div className="text-xs text-muted-foreground mb-1">Result</div>
-                <div className="text-sm font-bold uppercase text-foreground">{pred.result}</div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground mb-1">Stake</div>
-                <div className="text-sm font-mono font-bold">${pred.yourStake}</div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground mb-1">Payout</div>
-                <div className={`text-sm font-mono font-bold ${pred.won ? "text-gold" : "text-muted"}`}>
-                  ${pred.payout}
+
+              {/* Fee breakdown for won stakes */}
+              {won && !stake.claimed && (
+                <div className="mb-4 p-3 bg-gold/5 border border-gold/20 rounded text-xs space-y-1">
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Gross share</span>
+                    <span className="font-mono text-foreground">${gross.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Platform fee (5%)</span>
+                    <span className="font-mono text-accent">−${fee.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between font-bold border-t border-gold/20 pt-1">
+                    <span className="text-gold">Net payout</span>
+                    <span className="font-mono text-gold">${netPayout.toFixed(2)}</span>
+                  </div>
                 </div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground mb-1">P/L</div>
-                <div className={`text-sm font-mono font-bold ${pred.profit > 0 ? "text-success" : "text-accent"}`}>
-                  {pred.profit > 0 ? "+" : ""}${pred.profit} ({pred.roi.toFixed(0)}%)
+              )}
+
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">Your Side</div>
+                  <div
+                    className={`text-sm font-bold uppercase ${stake.side === "yes" ? "text-success" : "text-accent"}`}
+                  >
+                    {stake.side}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">Outcome</div>
+                  <div className="text-sm font-bold uppercase text-foreground">{stake.outcome}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">Stake</div>
+                  <div className="text-sm font-mono font-bold">${stake.amount}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">Net Payout</div>
+                  <div className={`text-sm font-mono font-bold ${won ? "text-gold" : "text-muted-foreground"}`}>
+                    {won ? `$${netPayout.toFixed(2)}` : "$0"}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">P/L</div>
+                  <div className={`text-sm font-mono font-bold ${(stake.profit ?? 0) > 0 ? "text-success" : "text-accent"}`}>
+                    {(stake.profit ?? 0) > 0 ? "+" : ""}${(stake.profit ?? 0).toFixed(0)}{" "}
+                    ({(stake.roi ?? 0).toFixed(0)}%)
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
-  )
+  );
 }
