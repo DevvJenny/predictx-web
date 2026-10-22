@@ -394,10 +394,11 @@ a,
     overflow-x: hidden;
   }
 
-  /* Minimum 44px touch targets (WCAG 2.5.5) */
+  /* Minimum 44px touch targets (WCAG 2.5.5) for real controls only */
   button,
-  a,
-  [role="button"] {
+  [role="button"],
+  a[class*="inline-flex"],
+  a[class*="btn"] {
     min-height: 44px;
   }
 
