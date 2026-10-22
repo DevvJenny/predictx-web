@@ -22,6 +22,7 @@ const FIELD_LIMITS: Record<string, number> = {
   route: 256,
   component: 128,
   stack: 2_000,
+  extra: 1_000,
   userAgent: 512,
   timestamp: 32,
 };
@@ -90,6 +91,11 @@ export async function POST(request: NextRequest) {
       return v.slice(0, limit);
     };
 
+    const extra =
+      payload.extra && typeof payload.extra === "object"
+        ? JSON.stringify(payload.extra).slice(0, FIELD_LIMITS.extra ?? 1_000)
+        : undefined;
+
     // Sanitise — only log known, length-capped fields to prevent log injection
     console.error("[ErrorReport]", {
       type: safe("type"),
@@ -97,6 +103,9 @@ export async function POST(request: NextRequest) {
       digest: safe("digest"),
       route: safe("route"),
       component: safe("component"),
+      stack: safe("stack"),
+      extra,
+      userAgent: safe("userAgent"),
       timestamp: safe("timestamp"),
     });
 

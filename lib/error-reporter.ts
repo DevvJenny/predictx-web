@@ -12,10 +12,11 @@ export interface ErrorContext {
   route?: string;
   component?: string;
   extra?: Record<string, unknown>;
+  type?: ErrorPayload["type"];
 }
 
 export interface ErrorPayload {
-  type: "caught-error" | "uncaught-error" | "unhandled-rejection";
+  type: "caught-error" | "uncaught-error" | "unhandled-rejection" | "global-error";
   message: string;
   digest?: string;
   stack?: string;
@@ -34,7 +35,7 @@ export function reportError(
   if (typeof window === "undefined") return; // SSR — skip
 
   const payload: ErrorPayload = {
-    type: "caught-error",
+    type: ctx.type ?? "caught-error",
     message: error.message,
     digest: error.digest,
     stack: error.stack,
