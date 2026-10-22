@@ -4,6 +4,7 @@ import { useMemo } from "react"
 import { Flame } from "lucide-react"
 import { PollCard } from "@/components/match/poll-card"
 import { useMockData } from "@/hooks/use-mock-data"
+import { rankTrendingPolls } from "@/lib/poll-ranking"
 
 /**
  * TrendingPolls
@@ -12,8 +13,7 @@ import { useMockData } from "@/hooks/use-mock-data"
  * triggered by actual pool/poll mutations rather than any store change.
  *
  * The ranking is recomputed inside useMemo with `polls` as the dependency, so
- * staking on a poll correctly moves it up the trending list within the same
- * session. Ties are broken by poll id for a stable sort.
+ * pool and participant changes immediately affect the trending list.
  */
 export function TrendingPolls() {
   // Narrow subscription — only re-render when the polls array reference changes.
@@ -23,15 +23,7 @@ export function TrendingPolls() {
 
   // Recompute ranking whenever the polls array changes (pool mutations, new polls, etc.)
   const trendingPolls = useMemo(
-    () =>
-      [...polls]
-        .filter((p) => p.status === "active")
-        .sort((a, b) => {
-          const poolDiff = (b.yesPool + b.noPool) - (a.yesPool + a.noPool)
-          // Stable tie-break by id so ordering is deterministic for equal pools.
-          return poolDiff !== 0 ? poolDiff : a.id.localeCompare(b.id)
-        })
-        .slice(0, 6),
+    () => rankTrendingPolls(polls),
     [polls],
   )
 

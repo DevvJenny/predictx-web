@@ -12,6 +12,7 @@ import {
   type PlatformStats,
 } from "@/lib/mock-data";
 import { trackEvent } from "@/lib/analytics";
+import { rankTrendingPolls } from "@/lib/poll-ranking";
 
 interface MockDataState {
   matches: Match[];
@@ -79,11 +80,7 @@ export const useMockData = create<MockDataState>()(
 
       getUpcomingMatches: () => get().matches.filter((m) => m.status === "upcoming"),
 
-      trendingPolls: () =>
-        [...get().polls]
-          .filter((p) => p.status === "active")
-          .sort((a, b) => b.yesPool + b.noPool - (a.yesPool + a.noPool))
-          .slice(0, 6),
+      trendingPolls: () => rankTrendingPolls(get().polls),
 
       updatePollPool: (pollId, side, amount, walletAddress) =>
         set((s) => {
