@@ -11,6 +11,7 @@ import { HudBar } from "@/components/layout/hud-bar"
 import { PageTransition } from "@/components/layout/page-transition"
 import { ErrorHandlerMount } from "@/components/shared/error-handler-mount"
 import { WalletConnectModalRoot } from "@/components/wallet-connect-modal-root"
+import { ThemeProvider } from "@/components/theme-provider"
 import { BackgroundEffects } from "@/components/shared"
 import { CardErrorBoundary } from "@/components/shared/card-error-boundary"
 
@@ -127,7 +128,9 @@ export default function RootLayout({
         <CardErrorBoundary componentName="ErrorHandlerMount">
           <ErrorHandlerMount />
         </CardErrorBoundary>
-        <Toaster theme="dark" position="bottom-right" />
+        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
+          <Toaster position="bottom-right" />
+        </ThemeProvider>
         <Analytics />
         <CardErrorBoundary componentName="MobileBottomNav">
           <MobileBottomNav />
